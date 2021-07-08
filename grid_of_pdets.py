@@ -30,7 +30,7 @@ _PSD_defaults = selection_effects._PSD_defaults
 
 ### Argument handling
 argp = argparse.ArgumentParser()
-argp.add_argument("--output-path", type=str, required=True, help="Path to output hdf5 file. By default, the key of the dataset will be ")
+argp.add_argument("--output-path", type=str, required=True, help="Path to output hdf5 file. By default, the key of the dataset will be the network configuration/sensitivity choice.")
 argp.add_argument("--psd-path", type=str, required=True, help="Path to directory with PSD files, saved in same format as Observing Scenarios data release.")
 argp.add_argument("--psd", type=str, required=True, help="Nickname for PSD setup to be used as defined in _PSD_defaults.")
 argp.add_argument("--snr-thresh", type=float, help="SNR threshold for detection, if not supplied will fall back to the defaults in _PSD_defaults.")
@@ -120,5 +120,5 @@ end_time = time.time()
 print("\nFinished! It took {:0.2f}s to run {:d} systems over {:d} cores!".format(end_time-start_time, len(grid), Ncore))
 
 # save to disk
-grid.to_hdf(os.path.join(args.output_path, 'pdet_grid.hdf5'), key=args.psd, mode='a')
+grid.to_hdf(os.path.join(args.output_path), key=args.psd, mode='a')
 
