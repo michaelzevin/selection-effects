@@ -22,7 +22,6 @@ import astropy.units as u
 from astropy.cosmology import Planck18 as cosmo
 from astropy.cosmology import z_at_value
 
-sys.path.insert(1, '/project2/kicp/michaelzevin/git/model_selection/populations')
 from utils import selection_effects
 
 ### Specify PSD information
