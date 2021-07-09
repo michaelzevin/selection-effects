@@ -12,7 +12,7 @@ Anticipates data as Pandas dataframe with series ['m1', 'q', 'z']
 import numpy as np
 import pandas as pd
 
-import astropy.cosmology import Planck18
+from astropy.cosmology import Planck18
 
 from sklearn.neighbors import KNeighborsRegressor
 
