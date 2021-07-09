@@ -78,7 +78,7 @@ def selection_function(data, grid, pdet_only=False, **kwargs):
         else:
             cosmo = Planck18
         cosmo_weight = cosmo.differential_comoving_volume(z_data) * (1+z_data)**(-1.0)
-        combined_weight = pdets * cosmo_weight
+        combined_weight = pdets * cosmo_weight.value
         combined_weight /= np.sum(combined_weight)
         return pdets, combined_weight
     
