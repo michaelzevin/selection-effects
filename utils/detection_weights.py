@@ -12,7 +12,7 @@ Anticipates data as Pandas dataframe with series ['m1', 'q', 'z']
 import numpy as np
 import pandas as pd
 
-import astropy
+import astropy.cosmology import Planck18
 
 from sklearn.neighbors import KNeighborsRegressor
 
@@ -76,7 +76,7 @@ def selection_function(data, grid, pdet_only=False, **kwargs):
         if 'cosmo' in kwargs:
             cosmo = kwargs['cosmo']
         else:
-            cosmo = astropy.cosmology.Planck18
+            cosmo = Planck18
         cosmo_weight = cosmo.differential_comoving_volume(z_data) * (1+z_data)**(-1.0)
         combined_weight = pdets * cosmo_weight
         combined_weight /= np.sum(combined_weight)
