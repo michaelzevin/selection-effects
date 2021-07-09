@@ -66,7 +66,7 @@ def selection_function(data, grid, pdet_only=False, **kwargs):
     # get pdets for the testing data
     X_fit = np.transpose(np.vstack([logm1_data_norm, q_data_norm, z_data_norm]))
     pdets = nbrs.predict(X_fit).flatten()
-    assert all([((y<=1) & (y>=0)) for y in y_fit]), 'pdet is not between 0 and 1'
+    assert all([((p<=1) & (p>=0)) for p in pdets]), 'pdet is not between 0 and 1'
 
     
     if pdet_only==True:
@@ -78,7 +78,7 @@ def selection_function(data, grid, pdet_only=False, **kwargs):
         else:
             cosmo = astropy.cosmology.Planck18
         cosmo_weight = cosmo.differential_comoving_volume(z_data) * (1+z_data)**(-1.0)
-        combined_weight = y_fit * cosmo_weight
+        combined_weight = pdets * cosmo_weight
         combined_weight /= np.sum(combined_weight)
         return pdets, combined_weight
     
