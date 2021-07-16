@@ -62,10 +62,16 @@ def selection_function(data, grid, pdet_only=False, **kwargs):
     logm1_data_norm = normalize(np.log10(m1_data), np.log10(m1_bounds[0]), np.log10(m1_bounds[1]))
     q_data_norm = normalize(q_data, q_bounds[0], q_bounds[1])
     z_data_norm = normalize(z_data, z_bounds[0], z_bounds[1])
+
+    # Only fit for things within the grid range, assign zeros to anything outside
+    good_idxs = np.argwhere(((logm1_data_norm >= 0) & (logm1_data_norm <= 1)) & \
+        ((q_data_norm >= 0) | (q_data_norm <= 1)) & ((z_data_norm >= 0) & (z_data_norm <= 1))).flatten()
     
     # get pdets for the testing data
-    X_fit = np.transpose(np.vstack([logm1_data_norm, q_data_norm, z_data_norm]))
-    pdets = nbrs.predict(X_fit).flatten()
+    X_fit = np.transpose(np.vstack([logm1_data_norm[good_idxs], 
+            q_data_norm[good_idxs], z_data_norm[good_idxs]]))
+    pdets = np.zeros(len(data))
+    pdets[good_idxs] = nbrs.predict(X_fit).flatten()
     assert all([((p<=1) & (p>=0)) for p in pdets]), 'pdet is not between 0 and 1'
 
     
@@ -79,6 +85,6 @@ def selection_function(data, grid, pdet_only=False, **kwargs):
             cosmo = Planck18
         cosmo_weight = cosmo.differential_comoving_volume(z_data) * (1+z_data)**(-1.0)
         combined_weight = pdets * cosmo_weight.value
-        combined_weight /= np.sum(combined_weight)
+        #combined_weight /= np.sum(combined_weight)
         return pdets, combined_weight
     
