@@ -21,7 +21,7 @@ args = argp.parse_args()
 data = pd.read_hdf(args.data_path, key='underlying')
 grid = pd.read_hdf(args.grid_path, key=args.sensitivity)
 
-data['pdets'] = np.nan
+data['pdet'] = np.nan
 data['combined_weight'] = np.nan
 
 # NOTE: Edit these to adjust your data to have the appropriately-named series ('m1', 'q', 'z')!
@@ -29,8 +29,10 @@ valid_idxs = list(data.loc[data['tlb_merge'] > 0].index)
 data.loc[valid_idxs, 'q'] = data.loc[valid_idxs,'m2'] / data.loc[valid_idxs,'m1']
 data.loc[valid_idxs,'z'] = data.loc[valid_idxs,'z_merge']
 
-data.loc[valid_idxs,'pdets'], data.loc[valid_idxs,'combined_weight'] = \
+data.loc[valid_idxs,'pdet'], data.loc[valid_idxs,'combined_weight'] = \
             selection_function(data.loc[valid_idxs], grid)
+
+data = data.drop(columns=['q','z'])
 
 
 # save to disk
