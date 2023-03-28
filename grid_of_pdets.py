@@ -23,15 +23,13 @@ from astropy.cosmology import z_at_value
 
 from utils import selection_effects
 
-### Specify PSD information
-_PSD_defaults = selection_effects._PSD_defaults
-
-
 ### Argument handling
 argp = argparse.ArgumentParser()
 argp.add_argument("--output-path", type=str, required=True, help="Path to output hdf5 file. By default, the key of the dataset will be the network configuration/sensitivity choice.")
-argp.add_argument("--psd-path", type=str, required=True, help="Path to directory with PSD files, saved in same format as Observing Scenarios data release.")
-argp.add_argument("--psd", type=str, required=True, help="Nickname for PSD setup to be used as defined in _PSD_defaults.")
+argp.add_argument("--psd-H1", type=str, required=True, help="Path to Hanford PSD. Should be same simple format as Observing Scenarios (https://dcc.ligo.org/LIGO-T2000012-v1/public), saved as text file with frequency (first column) and ASD (second column). Must be provided, use this argument for single-detector runs.")
+argp.add_argument("--psd-L1", type=str, help="Path to Livingston PSD. Should be same simple format as Observing Scenarios (https://dcc.ligo.org/LIGO-T2000012-v1/public), saved as text file with frequency (first column) and ASD (second column).")
+argp.add_argument("--psd-V1", type=str, required=True, help="Path to Virgo PSD. Should be same simple format as Observing Scenarios (https://dcc.ligo.org/LIGO-T2000012-v1/public), saved as text file with frequency (first column) and ASD (second column).")
+argp.add_argument("--grid-key", type=str, required=True, help="Key for saving the grid of detection probabilities.")
 argp.add_argument("--snr-thresh", type=float, help="SNR threshold for detection, if not supplied will fall back to the defaults in _PSD_defaults.")
 argp.add_argument("--approx", type=str, default="IMRPhenomPv2", help="Waveform approximant to use for pdet calculations. Default=IMRPhenomPv2.")
 argp.add_argument("--m1-min", type=float, default=3.0, help="Minimum value for the primary mass grid. Default=3.0")
@@ -81,19 +79,17 @@ print("  z: [{:0.1f}, {:0.1f}] ({:d} values)".format(args.z_min, args.z_max, arg
 print("  chieff: [{:0.1f}, {:0.1f}] ({:d} values)\n".format(args.chieff_min, args.chieff_max, args.chieff_num))
 
 # Determine sensitivity and network configuration
-ifos = _PSD_defaults[args.psd]
+ifos = {'H1':str(args.psd_H1)}
+if args.psd_L1:
+    ifos['L1'] = str(args.psd_L1)
+if args.psd_V1:
+    ifos['V1'] = str(args.psd_V1)
 # get SNR threshold
-if args.snr_thresh is not None:
-    snr_thresh = args.snr_thresh
-else:
-    if "network" in args.psd:
-        snr_thresh = _PSD_defaults['snr_network']
-    else:
-        snr_thresh = _PSD_defaults['snr_single']
+snr_thresh = args.snr_thresh
 # print info
 print("Network configuration (SNR threshold = {:0.1f}):".format(snr_thresh))
 for k, v in ifos.items():
-    print("  {:s}: {:s}".format(k,v))
+    print("  {:s}: {:s}".format(k,v.split('/')[-1].split('.')[0]))
 print("")
 
 # print waveform approximant that is used
@@ -101,8 +97,7 @@ print("Using the {:s} waveform approximant\n".format(args.approx))
 
 ### Main Function ###
 # set up partial functions and organize data for multiprocessing
-func = partial(selection_effects.detection_probability, ifos=ifos, rho_thresh=snr_thresh, Ntrials=args.Ntrials, \
-                    psd_path=args.psd_path, approx=args.approx)
+func = partial(selection_effects.detection_probability, ifos=ifos, rho_thresh=snr_thresh, Ntrials=args.Ntrials, approx=args.approx)
 
 # prepare data for multiprocessing
 print("Preparing data for multiprocessing...")
@@ -116,7 +111,6 @@ print("\nCalculating detection probabilities...")
 if args.multiproc == 1:
     results = []
     for system in tqdm(systems_info):
-        pdb.set_trace()
         results.append(func(system))
 else:
     mp = int(Ncore)
@@ -136,5 +130,5 @@ end_time = time.time()
 print("\nFinished! It took {:0.2f}s to run {:d} systems over {:d} cores!".format(end_time-start_time, len(grid), Ncore))
 
 # save to disk
-grid.to_hdf(os.path.join(args.output_path), key=args.psd, mode='a')
+grid.to_hdf(args.output_path, key=args.grid_key, mode='a')
 

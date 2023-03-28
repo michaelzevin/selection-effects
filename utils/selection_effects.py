@@ -99,7 +99,7 @@ def get_waveform(m1, m2, z, s1=None, s2=None, vary_params=False, **kwargs):
 
 
 # PSD call function
-def get_psd(psd, ifo=None, **kwargs):
+def get_psd(psd, **kwargs):
     """
     Gets the PSD from either observing scenarios table or lalsimulation
     """
@@ -107,17 +107,12 @@ def get_psd(psd, ifo=None, **kwargs):
     f_low = kwargs["f_low"] if "f_low" in kwargs else 10.
     f_high = kwargs["f_high"] if "f_high" in kwargs else 2048.
 
-    psd_path = kwargs["psd_path"] if "psd_path" in kwargs else None
-
     # try to read tables if strings are provided
     if type(psd)==str:
-        if ifo in ["H1", "L1"]:
-            psd_data = pd.read_csv(os.path.join(psd_path,'LIGO_P1200087.dat'), sep=' ', index_col=False)
-        elif ifo in ["V1"]:
-            psd_data = pd.read_csv(os.path.join(psd_path,'Virgo_P1200087.dat'), sep=' ', index_col=False)
-        freqs = np.asarray(psd_data["freq"])
+        psd_data = pd.read_csv(psd, delim_whitespace=True, index_col=False, names=['frequency','ASD'])
+        freqs = np.asarray(psd_data["frequency"])
         # observeing scenarios table provides ASDs
-        psd_vals = np.asarray(psd_data[psd])**2
+        psd_vals = np.asarray(psd_data['ASD'])**2
         psd_interp = interp1d(freqs, psd_vals)
 
     # otherwise, assume lalsimulation psd was provided
@@ -247,7 +242,7 @@ def gen_redshifts_unicomvol(n=1, z_max=3):
 
 
 # Detection probability function
-def detection_probability(system, ifos={"H1":"midhighlatelow"}, rho_thresh=8.0, Ntrials=1000, return_snrs=False, **kwargs):
+def detection_probability(system, ifos, rho_thresh=8.0, Ntrials=1000, return_snrs=False, **kwargs):
     """
     Calls other functions in this file to calculate a detection probability
     For multiprocessing purposes, takes in array 'system' of form:
@@ -264,7 +259,6 @@ def detection_probability(system, ifos={"H1":"midhighlatelow"}, rho_thresh=8.0, 
     f_low = kwargs["f_low"] if "f_low" in kwargs else 10.
     f_high = kwargs["f_high"] if "f_high" in kwargs else 2048.
     df = kwargs["df"] if "df" in kwargs else 1./32
-    psd_path = kwargs["psd_path"] if "psd_path" in kwargs else None
     approx = kwargs["approx"] if "approx" in kwargs else None
 
     # get the detectors of choice for the response function
@@ -275,7 +269,7 @@ def detection_probability(system, ifos={"H1":"midhighlatelow"}, rho_thresh=8.0, 
     # get the psds
     psds={}
     for ifo, psd in ifos.items():
-        psd_interp = get_psd(psd, ifo, f_low=f_low, f_high=f_high, psd_path=psd_path)
+        psd_interp = get_psd(psd, f_low=f_low, f_high=f_high)
         psds[ifo] = psd_interp
 
     # calculate optimal SNR (sometimes hits runtime error for some reason)
@@ -316,20 +310,3 @@ def detection_probability(system, ifos={"H1":"midhighlatelow"}, rho_thresh=8.0, 
         return weight, snr_opt, snrs, Thetas
     else:
         return weight, snr_opt
-
-
-
-_PSD_defaults = {
-    "ligo_psd": "LIGO_P1200087.dat",
-    "virgo_psd": "Virgo_P1200087.dat",
-    "midhighlatelow": {"H1":"midhighlatelow"},
-    "midhighlatelow_network": {"H1":"midhighlatelow",
-            "L1":"midhighlatelow",
-            "V1":"midhighlatelow"},
-    "design": {"H1":"design"},
-    "design_network": {"H1":"design",
-            "L1":"design",
-            "V1":"design"},
-    "snr_single": 8,
-    "snr_network": 10}
-
