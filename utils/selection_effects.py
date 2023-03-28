@@ -6,6 +6,7 @@ Functions for incorporating selection effects on a population of binaries.
 
 import numpy as np
 import pandas as pd
+import os
 
 from scipy.interpolate import interp1d
 
@@ -111,9 +112,9 @@ def get_psd(psd, ifo=None, **kwargs):
     # try to read tables if strings are provided
     if type(psd)==str:
         if ifo in ["H1", "L1"]:
-            psd_data = pd.read_csv(psd_path+'/LIGO_P1200087.dat', sep=' ', index_col=False)
+            psd_data = pd.read_csv(os.path.join(psd_path,'LIGO_P1200087.dat'), sep=' ', index_col=False)
         elif ifo in ["V1"]:
-            psd_data = pd.read_csv(psd_path+'/Virgo_P1200087.dat', sep=' ', index_col=False)
+            psd_data = pd.read_csv(os.path.join(psd_path,'Virgo_P1200087.dat'), sep=' ', index_col=False)
         freqs = np.asarray(psd_data["freq"])
         # observeing scenarios table provides ASDs
         psd_vals = np.asarray(psd_data[psd])**2
@@ -264,6 +265,7 @@ def detection_probability(system, ifos={"H1":"midhighlatelow"}, rho_thresh=8.0, 
     f_high = kwargs["f_high"] if "f_high" in kwargs else 2048.
     df = kwargs["df"] if "df" in kwargs else 1./32
     psd_path = kwargs["psd_path"] if "psd_path" in kwargs else None
+    approx = kwargs["approx"] if "approx" in kwargs else None
 
     # get the detectors of choice for the response function
     detectors = {}
@@ -278,7 +280,7 @@ def detection_probability(system, ifos={"H1":"midhighlatelow"}, rho_thresh=8.0, 
 
     # calculate optimal SNR (sometimes hits runtime error for some reason)
     try:
-        hpf_opt, hxf_opt, freqs = get_waveform(m1, m2, z, s1, s2, vary_params=False, f_low=f_low, f_high=f_high, df=df)
+        hpf_opt, hxf_opt, freqs = get_waveform(m1, m2, z, s1, s2, vary_params=False, f_low=f_low, f_high=f_high, df=df, approx=approx)
         rho_opts={}
         for ifo in ifos.keys():
             rho_opts[ifo] = snr(hpf_opt, hxf_opt, freqs, psds[ifo], f_low=f_low, df=df)
