@@ -113,13 +113,13 @@ def get_psd(psd, **kwargs):
         freqs = np.asarray(psd_data["frequency"])
         # observeing scenarios table provides ASDs
         psd_vals = np.asarray(psd_data['ASD'])**2
-        psd_interp = interp1d(freqs, psd_vals)
+        psd_interp = interp1d(freqs, psd_vals, fill_value='extrapolate')
 
     # otherwise, assume lalsimulation psd was provided
     else:
         freqs = np.arange(f_low, f_high+df, df)
         psd_vals = np.asarray(list(map(psd, freqs)))
-        psd_interp = interp1d(freqs, psd_vals)
+        psd_interp = interp1d(freqs, psd_vals, fill_value='extrapolate')
 
     return psd_interp
 
