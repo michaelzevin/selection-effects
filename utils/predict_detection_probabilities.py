@@ -22,7 +22,7 @@ def normalize(x, xmin, xmax, a=0, b=1):
     return data_norm
 
 
-def selection_function(data, grid, pdet_only=False, chieff=False, **kwargs):
+def pdets_from_grid(data, grid, pdet_only=False, chieff=False, **kwargs):
     """
     Gives a relative weight to each system in the dataframe `df` based on its proximity
     to the points on the grid.
@@ -43,11 +43,11 @@ def selection_function(data, grid, pdet_only=False, chieff=False, **kwargs):
         chieff_grid = np.asarray(grid['chieff'])
 
     # get bounds based on grid
-    m1_bounds = (np.round(m1_grid.min(), 2), np.round(m1_grid.max(), 2))
-    q_bounds = (np.round(q_grid.min(), 2), np.round(q_grid.max(), 2))
-    z_bounds = (np.round(z_grid.min(), 2), np.round(z_grid.max(), 2))
+    m1_bounds = (np.round(m1_grid.min(), 5), np.round(m1_grid.max(), 5))
+    q_bounds = (np.round(q_grid.min(), 5), np.round(q_grid.max(), 5))
+    z_bounds = (np.round(z_grid.min(), 5), np.round(z_grid.max(), 5))
     if chieff:
-        chieff_bounds = (np.round(chieff_grid.min(), 2), np.round(chieff_grid.max(), 2))
+        chieff_bounds = (np.round(chieff_grid.min(), 5), np.round(chieff_grid.max(), 5))
 
     # normalize to unit cube
     logm1_grid_norm = normalize(np.log10(m1_grid), np.log10(m1_bounds[0]), np.log10(m1_bounds[1]))
@@ -78,24 +78,14 @@ def selection_function(data, grid, pdet_only=False, chieff=False, **kwargs):
     if chieff:
         chieff_data_norm = normalize(chieff_data, chieff_bounds[0], chieff_bounds[1])
 
-    # Only fit for things within the grid range, assign zeros to anything outside
-    if chieff:
-        good_idxs = np.argwhere(((logm1_data_norm >= 0) & (logm1_data_norm <= 1)) & \
-            ((q_data_norm >= 0) | (q_data_norm <= 1)) & ((logz_data_norm >= 0) & (logz_data_norm <= 1)) & \
-            ((chieff_data_norm >= 0) & (chieff_data_norm <= 1))).flatten()
-    else:
-        good_idxs = np.argwhere(((logm1_data_norm >= 0) & (logm1_data_norm <= 1)) & \
-            ((q_data_norm >= 0) | (q_data_norm <= 1)) & ((logz_data_norm >= 0) & (logz_data_norm <= 1))).flatten()
-
     # get pdets for the testing data
     if chieff:
-        X_fit = np.transpose(np.vstack([logm1_data_norm[good_idxs],
-                q_data_norm[good_idxs], logz_data_norm[good_idxs], chieff_data_norm[good_idxs]]))
+        X_fit = np.transpose(np.vstack([logm1_data_norm, q_data_norm,
+                                        logz_data_norm, chieff_data_norm]))
     else:
-        X_fit = np.transpose(np.vstack([logm1_data_norm[good_idxs],
-                q_data_norm[good_idxs], logz_data_norm[good_idxs]]))
-    pdets = np.zeros(len(data))
-    pdets[good_idxs] = nbrs.predict(X_fit).flatten()
+        X_fit = np.transpose(np.vstack([logm1_data_norm,
+                                        q_data_norm, logz_data_norm]))
+    pdets = nbrs.predict(X_fit).flatten()
     assert all([((p<=1) & (p>=0)) for p in pdets]), 'pdet is not between 0 and 1'
 
 
