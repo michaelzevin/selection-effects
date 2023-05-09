@@ -33,7 +33,7 @@ argp.add_argument("--grid-key", type=str, required=True, help="Key for saving th
 argp.add_argument("--snr-thresh", type=float, help="SNR threshold for detection, if not supplied will fall back to the defaults in _PSD_defaults.")
 argp.add_argument("--approx", type=str, default="IMRPhenomPv2", help="Waveform approximant to use for pdet calculations. Default=IMRPhenomPv2.")
 argp.add_argument("--m1-min", type=float, default=3.0, help="Minimum value for the primary mass grid. Default=3.0")
-argp.add_argument("--m1-max", type=float, default=500.0, help="Maximum value for the primary mass grid. Default=200.0")
+argp.add_argument("--m1-max", type=float, default=500.0, help="Maximum value for the primary mass grid. Default=500.0")
 argp.add_argument("--m1-num", type=int, default=10, help="Number of values in the m1 grid (log-spaced). Default=10")
 argp.add_argument("--q-min", type=float, default=0.1, help="Minimum value for the mass ratio grid. Default=0.1")
 argp.add_argument("--q-max", type=float, default=1.0, help="Maximum value for the mass ratio grid. Default=1.0")
@@ -73,10 +73,10 @@ grid = np.append(grid, np.atleast_2d(grid[:,0]*grid[:,1]).T, axis=1)
 grid = pd.DataFrame(grid, columns=['m1','q','z','chieff','m2'])
 # print info about grid
 print("Grid info:")
-print("  m1: [{:0.1f}, {:0.1f}] ({:d} values)".format(args.m1_min, args.m1_max, args.m1_num))
-print("  q: [{:0.1f}, {:0.1f}] ({:d} values)".format(args.q_min, args.q_max, args.q_num))
-print("  z: [{:0.1f}, {:0.1f}] ({:d} values)".format(args.z_min, args.z_max, args.z_num))
-print("  chieff: [{:0.1f}, {:0.1f}] ({:d} values)\n".format(args.chieff_min, args.chieff_max, args.chieff_num))
+print("  m1: [{:0.2f}, {:0.2f}] ({:d} values)".format(args.m1_min, args.m1_max, args.m1_num))
+print("  q: [{:0.2f}, {:0.2f}] ({:d} values)".format(args.q_min, args.q_max, args.q_num))
+print("  z: [{:0.2f}, {:0.2f}] ({:d} values)".format(args.z_min, args.z_max, args.z_num))
+print("  chieff: [{:0.2f}, {:0.2f}] ({:d} values)\n".format(args.chieff_min, args.chieff_max, args.chieff_num))
 
 # Determine sensitivity and network configuration
 ifos = {'H1':str(args.psd_H1)}
@@ -87,7 +87,7 @@ if args.psd_V1:
 # get SNR threshold
 snr_thresh = args.snr_thresh
 # print info
-print("Network configuration (SNR threshold = {:0.1f}):".format(snr_thresh))
+print("Network configuration (SNR threshold = {:0.2f}):".format(snr_thresh))
 for k, v in ifos.items():
     print("  {:s}: {:s}".format(k,v.split('/')[-1].split('.')[0]))
 print("")
