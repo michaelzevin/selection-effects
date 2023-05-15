@@ -9,7 +9,7 @@ import pandas as pd
 import argparse
 import sys
 sys.path.insert(1, '../utils')
-from detection_weights import selection_function
+from predict_detection_probabilities import pdets_from_grid
 
 ### Argument handling
 argp = argparse.ArgumentParser()
@@ -24,13 +24,13 @@ grid = pd.read_hdf(args.grid_path, key=args.sensitivity)
 data['pdet'] = np.nan
 data['combined_weight'] = np.nan
 
-# NOTE: Edit these to adjust your data to have the appropriately-named series ('m1', 'q', 'z')!
+# NOTE: Edit these to adjust your data to have the appropriately-named series ('m1', 'q', 'z', 'chieff')!
 valid_idxs = list(data.loc[data['tlb_merge'] > 0].index)
 data.loc[valid_idxs, 'q'] = data.loc[valid_idxs,'m2'] / data.loc[valid_idxs,'m1']
 data.loc[valid_idxs,'z'] = data.loc[valid_idxs,'z_merge']
 
 data.loc[valid_idxs,'pdet'], data.loc[valid_idxs,'combined_weight'] = \
-            selection_function(data.loc[valid_idxs], grid)
+            pdets_from_grid(data.loc[valid_idxs], grid)
 
 data = data.drop(columns=['q','z'])
 
