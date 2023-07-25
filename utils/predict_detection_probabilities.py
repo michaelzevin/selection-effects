@@ -26,11 +26,12 @@ def normalize(x, xmin, xmax, a=0, b=1):
 
 class LVKWeighter(object):
 
-    def prepareData(self, data):
+    def prepareData(self, data, setbounds=False):
                 
-        # Set bounds
-        bounds = { field : (np.round(data[field].min(), 5),
-                            np.round(data[field].max(), 5)) for field in self.fields}
+        # Set bounds if they 
+        if setbounds:
+            self.bounds = { field : (np.round(data[field].min(), 5),
+                                     np.round(data[field].max(), 5)) for field in self.fields}
 
         grids = {}
         
@@ -40,15 +41,15 @@ class LVKWeighter(object):
             # These fields get log grids
             if field in ['m1', 'z']:
                 grids[field] = normalize(np.log10(data[field]),
-                                         np.log10(bounds[field][0]),
-                                         np.log10(bounds[field][1]))
+                                         np.log10(self.bounds[field][0]),
+                                         np.log10(self.bounds[field][1]))
             else:
                 grids[field] = normalize(data[field],
-                                         bounds[field][0],
-                                         bounds[field][1])
+                                         self.bounds[field][0],
+                                         self.bounds[field][1])
 
         # Return the bounds and normalized and logarithmed grids
-        return (bounds, grids)
+        return grids
     
     def __init__(self, gridspec, chieff=False, rebuild=False):
 
@@ -81,8 +82,8 @@ class LVKWeighter(object):
             # Load the grid 
             grid = pd.read_hdf(gridname, key=key)
 
-            # Normalize and logarithm the data
-            bounds, grids = self.prepareData(grid)
+            # Store the bounds of the training data
+            grids = self.prepareData(grid, setbounds=True)
 
             # Train nearest neighbor algorithm
             X = np.transpose(np.vstack(list(grids.values())))
@@ -123,7 +124,7 @@ class LVKWeighter(object):
         data, pdet_only, kwargs = args
         
         # Preprocess the data
-        bounds, grids = self.prepareData(data)
+        grids = self.prepareData(data)
 
         # Get it ready to go 
         X_fit = np.transpose(np.vstack(list(grids.values())))
