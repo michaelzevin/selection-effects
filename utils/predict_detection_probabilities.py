@@ -61,7 +61,7 @@ class LVKWeighter(object):
 
         # Load the grid from the file and then ditch this
         # so we don't carry this process baggage with us
-        gridname, key = gridspec.split(':')
+        self.gridfile, self.key = gridspec.split(':')
 
         # If we don't have a cache storage directory, make one
         if not os.path.exists("selection_cache"):
@@ -69,18 +69,25 @@ class LVKWeighter(object):
             os.mkdir("selection_cache")
 
         # See if we have a cached object for us already present
-        cache_name = "selection_cache/%s_%s.knbr" % (gridname, key)
+        cache_name = "selection_cache/%s_%s.lvkw" % (self.gridfile, self.key)
 
         # Load the cached version or rebuild it from the hdf5
         if os.path.exists(cache_name) and not rebuild:
             print("LVKWeighter: found cache file %s, loading..." % cache_name)
-            self.nbrs = pickle.load(open(cache_name, 'rb'))
+            tmp = pickle.load(open(cache_name, 'rb'))
+
+            # Assign local attributes from the tmp
+            self.gridfile = tmp.gridfile
+            self.key = tmp.key
+            self.fields = tmp.fields
+            self.bounds = tmp.bounds
+            self.nbrs = tmp.nbrs
         else:
             # Generate it and store it
             print("LVKWeighter: no cache file found, training...")
             
             # Load the grid 
-            grid = pd.read_hdf(gridname, key=key)
+            grid = pd.read_hdf(self.gridfile, key=self.key)
 
             # Store the bounds of the training data
             grids = self.prepareData(grid, setbounds=True)
@@ -96,8 +103,8 @@ class LVKWeighter(object):
             # Now delete the fit data from inside the object (we don't need it anymore and its 25% of the size)
             del(self.nbrs._fit_X)
             
-            # Store a pickle in cache
-            pickle.dump(self.nbrs, open(cache_name, 'wb'))
+            # Store ourselves pickled in cache
+            pickle.dump(self, open(cache_name, 'wb'))
 
             # Report
             print("LVKWeighter: cache file %s done." % cache_name)
@@ -105,6 +112,9 @@ class LVKWeighter(object):
     # A multiprocessing wrapper around estimate_core()
     def estimate(self, data, pool=None, pdet_only=False, **kwargs):
 
+        if self.bounds is None:
+            raise Exception("Bounds have not been set.  Somehow the object was not initialized.")
+        
         # Make a judgment call here as to when its worth going in parallel
         if not pool or (len(data) / pool._processes < 1e4):
             return self.estimate_core((data, pdet_only, kwargs))
@@ -131,7 +141,6 @@ class LVKWeighter(object):
 
         # Use the persisted trained object
         pdets = self.nbrs.predict(X_fit).flatten()
-        print(pdets)
         
         assert all([((p<=1) & (p>=0)) for p in pdets]), 'pdet is not between 0 and 1'
 
