@@ -26,16 +26,16 @@ def normalize(x, xmin, xmax, a=0, b=1):
 
 class LVKWeighter(object):
 
-    def prepareData(self, data, fields=['m1', 'q', 'z']):
+    def prepareData(self, data):
                 
         # Set bounds
         bounds = { field : (np.round(data[field].min(), 5),
-                            np.round(data[field].max(), 5)) for field in fields}
+                            np.round(data[field].max(), 5)) for field in self.fields}
 
         grids = {}
         
         # Normalize and apply logarithms if necessary
-        for field in fields:
+        for field in self.fields:
 
             # These fields get log grids
             if field in ['m1', 'z']:
@@ -50,34 +50,80 @@ class LVKWeighter(object):
         # Return the bounds and normalized and logarithmed grids
         return (bounds, grids)
     
-    def __init__(self, grid, chieff=False):
+    def __init__(self, gridspec, chieff=False, rebuild=False):
 
-        fields = ['m1', 'q', 'z']
+        # Specify the data format
+        self.fields = ['m1', 'q', 'z']
 
         if chieff:
-            fields.append('chieff')
+            self.fields.append('chieff')
 
-        # Normalize and logarithm the data
-        bounds, grids = self.prepareData(grid, fields)
+        # Load the grid from the file and then ditch this
+        # so we don't carry this process baggage with us
+        gridname, key = gridspec.split(':')
+
+        # If we don't have a cache storage directory, make one
+        if not os.path.exists("selection_cache"):
+            print("LVKWeighter: cache storage directory missing, making...")
+            os.mkdir("selection_cache")
+
+        # See if we have a cached object for us already present
+        cache_name = "selection_cache/%s_%s.knbr" % (gridname, key)
+
+        # Load the cached version or rebuild it from the hdf5
+        if os.path.exists(cache_name) and not rebuild:
+            print("LVKWeighter: found cache file %s, loading..." % cache_name)
+            self.nbrs = pickle.load(open(cache_name, 'rb'))
+        else:
+            # Generate it and store it
+            print("LVKWeighter: no cache file found, training...")
+            
+            # Load the grid 
+            grid = pd.read_hdf(gridname, key=key)
+
+            # Normalize and logarithm the data
+            bounds, grids = self.prepareData(grid)
+
+            # Train nearest neighbor algorithm
+            X = np.transpose(np.vstack(list(grids.values())))
+            y = np.transpose(np.atleast_2d(grid['pdet']))
+
+            # This is the only object we need to persist
+            self.nbrs = KNeighborsRegressor(n_neighbors=10, weights='distance', algorithm='ball_tree', leaf_size=30, p=2, metric='minkowski')
+            self.nbrs.fit(X, y)
+
+            # Now delete the fit data from inside the object (we don't need it anymore and its 25% of the size)
+            del(self.nbrs._fit_X)
+            
+            # Store a pickle in cache
+            pickle.dump(self.nbrs, open(cache_name, 'wb'))
+
+            # Report
+            print("LVKWeighter: cache file %s done." % cache_name)
+
+    # A multiprocessing wrapper around estimate_core()
+    def estimate(self, data, pool=None, pdet_only=False, **kwargs):
+
+        # Make a judgment call here as to when its worth going in parallel
+        if not pool or (len(data) / pool._processes < 1e4):
+            return self.estimate_core((data, pdet_only, kwargs))
+        else:
+            # Swim in the pool
+            results = pool.map(self.estimate_core, [(data_chunk,
+                                                     pdet_only,
+                                                     kwargs) for data_chunk in np.array_split(data, pool._processes)])
+
+            # Assemble the results
+            return (np.concatenate(x) for x in zip(*results))
         
-        # Train nearest neighbor algorithm
-        X = np.transpose(np.vstack(list(grids.values())))
-        y = np.transpose(np.atleast_2d(grid['pdet']))
-
-        # This is the only object we need to persist
-        self.nbrs = KNeighborsRegressor(n_neighbors=10, weights='distance', algorithm='ball_tree', leaf_size=30, p=2, metric='minkowski')
-        self.nbrs.fit(X, y)
-
     # Perform the estimation
-    def estimate(self, data, chieff=False, pdet_only=False, **kwargs):
+    def estimate_core(self, args):
 
-        fields = ['m1', 'q', 'z']
-
-        if chieff:
-            fields.append('chieff')
-
+        # Unpack the arguments
+        data, pdet_only, kwargs = args
+        
         # Preprocess the data
-        bounds, grids = self.prepareData(data, fields)
+        bounds, grids = self.prepareData(data)
 
         # Get it ready to go 
         X_fit = np.transpose(np.vstack(list(grids.values())))
@@ -98,10 +144,7 @@ class LVKWeighter(object):
                 cosmo = Planck18
 
             cosmo_weight = cosmo.differential_comoving_volume(data['z']).value * (1+data['z'])**(-1.0)
-            print(cosmo_weight)
-            
             combined_weight = pdets * cosmo_weight
             #combined_weight /= np.sum(combined_weight)
 
-            print(combined_weight)
             return pdets, combined_weight
