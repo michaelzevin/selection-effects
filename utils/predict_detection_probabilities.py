@@ -24,85 +24,137 @@ def normalize(x, xmin, xmax, a=0, b=1):
     data_norm = (b-a)*(x-xmin) / (xmax-xmin) + a
     return data_norm
 
+class LVKWeighter(object):
 
-def pdets_from_grid(data, grid, pdet_only=False, chieff=False, **kwargs):
-    """
-    Gives relative weight to each system in `data`
-    based on its proximity to the points on the grid.
+    def prepareData(self, data, setbounds=False):
+                
+        # Set bounds if they 
+        if setbounds:
+            self.bounds = { field : (np.round(data[field].min(), 5),
+                                     np.round(data[field].max(), 5)) for field in self.fields}
 
-    Each system in `data` should have a primary mass `m1`, mass ratio `q`, and redshift `z`
-    Can also include effective spin by setting chieff=True
+        grids = {}
+        
+        # Normalize and apply logarithms if necessary
+        for field in self.fields:
 
-    This function will determine detection probabilities using nearest neighbor algorithm
-    in [log(m1), q, log(z), chieff] space
+            # These fields get log grids
+            if field in ['m1', 'z']:
+                grids[field] = normalize(np.log10(data[field]),
+                                         np.log10(self.bounds[field][0]),
+                                         np.log10(self.bounds[field][1]))
+            else:
+                grids[field] = normalize(data[field],
+                                         self.bounds[field][0],
+                                         self.bounds[field][1])
 
-    Need to specify bounds (based on the trained grid) so that the grid and data get
-    normalized properly
-    """
-    # get values from grid for training
-    pdets = np.asarray(grid['pdet'])
-    m1_grid = np.asarray(grid['m1'])
-    q_grid = np.asarray(grid['q'])
-    z_grid = np.asarray(grid['z'])
-    if chieff:
-        chieff_grid = np.asarray(grid['chieff'])
+        # Return the bounds and normalized and logarithmed grids
+        return grids
+    
+    def __init__(self, gridspec, chieff=False, rebuild=False):
 
-    # get bounds based on grid
-    m1_bounds = (np.round(m1_grid.min(), 5), np.round(m1_grid.max(), 5))
-    q_bounds = (np.round(q_grid.min(), 5), np.round(q_grid.max(), 5))
-    z_bounds = (np.round(z_grid.min(), 5), np.round(z_grid.max(), 5))
-    if chieff:
-        chieff_bounds = (np.round(chieff_grid.min(), 5), np.round(chieff_grid.max(), 5))
+        # Specify the data format
+        self.fields = ['m1', 'q', 'z']
 
-    # normalize to unit cube
-    logm1_grid_norm = normalize(np.log10(m1_grid), np.log10(m1_bounds[0]), np.log10(m1_bounds[1]))
-    q_grid_norm = normalize(q_grid, q_bounds[0], q_bounds[1])
-    logz_grid_norm = normalize(np.log10(z_grid), np.log10(z_bounds[0]), np.log10(z_bounds[1]))
-    if chieff:
-        chieff_grid_norm = normalize(chieff_grid, chieff_bounds[0], chieff_bounds[1])
+        if chieff:
+            self.fields.append('chieff')
 
-    # train nearest neighbor algorithm
-    if chieff:
-        X = np.transpose(np.vstack([logm1_grid_norm, q_grid_norm, logz_grid_norm, chieff_grid_norm]))
-    else:
-        X = np.transpose(np.vstack([logm1_grid_norm, q_grid_norm, logz_grid_norm]))
-    y = np.transpose(np.atleast_2d(pdets))
-    nbrs = KNeighborsRegressor(n_neighbors=10, weights='distance', algorithm='ball_tree', leaf_size=30, p=2, metric='minkowski')
-    nbrs.fit(X, y)
+        # Load the grid from the file and then ditch this
+        # so we don't carry this process baggage with us
+        self.gridfile, self.key = gridspec.split(':')
 
-    # get values from dataset and normalize
-    m1_data = np.asarray(data['m1'])
-    q_data = np.asarray(data['q'])
-    z_data = np.asarray(data['z'])
-    if chieff:
-        chieff_data = np.asarray(data['chieff'])
+        # If we don't have a cache storage directory, make one
+        if not os.path.exists("selection_cache"):
+            print("LVKWeighter: cache storage directory missing, making...")
+            os.mkdir("selection_cache")
 
-    logm1_data_norm = normalize(np.log10(m1_data), np.log10(m1_bounds[0]), np.log10(m1_bounds[1]))
-    q_data_norm = normalize(q_data, q_bounds[0], q_bounds[1])
-    logz_data_norm = normalize(np.log10(z_data), np.log10(z_bounds[0]), np.log10(z_bounds[1]))
-    if chieff:
-        chieff_data_norm = normalize(chieff_data, chieff_bounds[0], chieff_bounds[1])
+        # See if we have a cached object for us already present
+        cache_name = "selection_cache/%s_%s.lvkw" % (self.gridfile, self.key)
 
-    # get pdets for the testing data
-    if chieff:
-        X_fit = np.transpose(np.vstack([logm1_data_norm, q_data_norm,
-                                        logz_data_norm, chieff_data_norm]))
-    else:
-        X_fit = np.transpose(np.vstack([logm1_data_norm,
-                                        q_data_norm, logz_data_norm]))
-    pdets = nbrs.predict(X_fit).flatten()
-    assert all([((p<=1) & (p>=0)) for p in pdets]), 'pdet is not between 0 and 1'
+        # Load the cached version or rebuild it from the hdf5
+        if os.path.exists(cache_name) and not rebuild:
+            print("LVKWeighter: found cache file %s, loading..." % cache_name)
+            tmp = pickle.load(open(cache_name, 'rb'))
 
-
-    if pdet_only==True:
-        return pdets
-    else:
-        # cosmological VT term for fitted data
-        if 'cosmo' in kwargs:
-            cosmo = kwargs['cosmo']
+            # Assign local attributes from the tmp
+            self.gridfile = tmp.gridfile
+            self.key = tmp.key
+            self.fields = tmp.fields
+            self.bounds = tmp.bounds
+            self.nbrs = tmp.nbrs
         else:
-            cosmo = Planck18
-        cosmo_weight = cosmo.differential_comoving_volume(z_data) * (1+z_data)**(-1.0)
-        combined_weight = pdets * cosmo_weight.value
-        #combined_weight /= np.sum(combined_weight)
-        return pdets, combined_weight
+            # Generate it and store it
+            print("LVKWeighter: no cache file found, training...")
+            
+            # Load the grid 
+            grid = pd.read_hdf(self.gridfile, key=self.key)
+
+            # Store the bounds of the training data
+            grids = self.prepareData(grid, setbounds=True)
+
+            # Train nearest neighbor algorithm
+            X = np.transpose(np.vstack(list(grids.values())))
+            y = np.transpose(np.atleast_2d(grid['pdet']))
+
+            # This is the only object we need to persist
+            self.nbrs = KNeighborsRegressor(n_neighbors=10, weights='distance', algorithm='ball_tree', leaf_size=30, p=2, metric='minkowski')
+            self.nbrs.fit(X, y)
+
+            # Now delete the fit data from inside the object (we don't need it anymore and its 25% of the size)
+            del(self.nbrs._fit_X)
+            
+            # Store ourselves pickled in cache
+            pickle.dump(self, open(cache_name, 'wb'))
+
+            # Report
+            print("LVKWeighter: cache file %s done." % cache_name)
+
+    # A multiprocessing wrapper around estimate_core()
+    def estimate(self, data, pool=None, pdet_only=False, **kwargs):
+
+        if self.bounds is None:
+            raise Exception("Bounds have not been set.  Somehow the object was not initialized.")
+        
+        # Make a judgment call here as to when its worth going in parallel
+        if not pool or (len(data) / pool._processes < 1e4):
+            return self.estimate_core((data, pdet_only, kwargs))
+        else:
+            # Swim in the pool
+            results = pool.map(self.estimate_core, [(data_chunk,
+                                                     pdet_only,
+                                                     kwargs) for data_chunk in np.array_split(data, pool._processes)])
+
+            # Assemble the results
+            return (np.concatenate(x) for x in zip(*results))
+        
+    # Perform the estimation
+    def estimate_core(self, args):
+
+        # Unpack the arguments
+        data, pdet_only, kwargs = args
+        
+        # Preprocess the data
+        grids = self.prepareData(data)
+
+        # Get it ready to go 
+        X_fit = np.transpose(np.vstack(list(grids.values())))
+
+        # Use the persisted trained object
+        pdets = self.nbrs.predict(X_fit).flatten()
+        
+        assert all([((p<=1) & (p>=0)) for p in pdets]), 'pdet is not between 0 and 1'
+
+        if pdet_only==True:
+            return pdets
+        else:
+            # cosmological VT term for fitted data
+            if 'cosmo' in kwargs:
+                cosmo = kwargs['cosmo']
+            else:
+                cosmo = Planck18
+
+            cosmo_weight = cosmo.differential_comoving_volume(data['z']).value * (1+data['z'])**(-1.0)
+            combined_weight = pdets * cosmo_weight
+            #combined_weight /= np.sum(combined_weight)
+
+            return pdets, combined_weight
